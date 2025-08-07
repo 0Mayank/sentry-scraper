@@ -16,6 +16,7 @@ pub struct ParseReasonError;
 
 #[derive(Debug, Default, serde::Serialize)]
 pub struct ErrorTree {
+    // TODO: might put location here with either user emails or errors
     pub users: HashSet<Email>,
     pub errors: HashMap<ErrorReason, ErrorTree>,
 }
@@ -41,6 +42,48 @@ impl ErrorTree {
             prev = nodes;
             prev.users.insert(email.to_string());
         }
+    }
+
+    pub fn filter<F>(&mut self, mut f: F) -> &mut Self
+    where
+        F: FnMut(&ErrorReason) -> bool,
+    {
+        self._filter(&mut f);
+        self
+    }
+
+    pub fn prune<F>(&mut self, mut f: F) -> &mut Self
+    where
+        F: FnMut(&ErrorReason) -> bool,
+    {
+        self._prune(&mut f);
+        self
+    }
+
+    fn _filter<F>(&mut self, f: &mut F)
+    where
+        F: FnMut(&ErrorReason) -> bool,
+    {
+        self.errors.retain(|e, tree| {
+            if f(e) {
+                return true;
+            }
+            tree._filter(f);
+            !tree.errors.is_empty()
+        });
+    }
+
+    fn _prune<F>(&mut self, f: &mut F)
+    where
+        F: FnMut(&ErrorReason) -> bool,
+    {
+        self.errors.retain(|e, tree| {
+            if f(e) {
+                return false;
+            }
+            tree._prune(f);
+            true
+        });
     }
 
     fn _display(
@@ -179,6 +222,56 @@ mod tests {
         let mut tree = ErrorTree::new();
 
         tree.insert_many(email, errors);
+        dbg!(&tree);
+
+        println!("<><><><><>\n\n{}", tree);
+    }
+
+    #[test]
+    fn test_error_tree_filter() {
+        let email = "XDD";
+        let msg = r#"
+[DownloadError]
+├╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+├╴Reason: [Downloading(NetworkError)]
+├╴{"profile_id":100009,"profile_key":"","forcedownload":false,"silent_progress":false,"model_type":"Retouching"}
+├╴Error while resolving background task
+├╴1 additional opaque attachment
+│
+├─▶ error decoding response body
+│   ╰╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+│
+├─▶ error reading a body from connection
+│   ╰╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+│
+╰─▶ Foi forçado o cancelamento de uma conexão existente pelo host remoto. (os error 10054)
+    ├╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+    ╰╴span trace with 2 frames (1)
+
+Other Error
+├╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+├╴Reason: [Downloading(NetworkError)]
+├╴{"profile_id":100009,"profile_key":"","forcedownload":false,"silent_progress":false,"model_type":"Retouching"}
+├╴Error while resolving background task
+├╴1 additional opaque attachment
+│
+├─▶ error decoding response body
+│   ╰╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+│
+├─▶ error reading a body from connection
+│   ╰╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+│
+╰─▶ Foi forçado o cancelamento de uma conexão existente pelo host remoto. (os error 10054)
+    ├╴at C:\actions-runner\_work\AfterShoot-Desktop-App\AfterShoot-Desktop-App\src\download.rs:1230:10
+    ╰╴span trace with 2 frames (1)
+"#;
+        let errors = ErrorRepr::from_msg(msg).unwrap();
+
+        let mut tree = ErrorTree::new();
+
+        tree.insert_many(email, errors);
+        dbg!(&tree);
+        tree.prune(|e| matches!(e, ErrorReason::OtherError));
         dbg!(&tree);
 
         println!("<><><><><>\n\n{}", tree);

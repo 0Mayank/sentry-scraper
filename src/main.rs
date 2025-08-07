@@ -9,36 +9,25 @@ fn main() {
 
     let mut error_tree = ErrorTree::new();
     let mut failed_users = vec![];
-    // let mut failed_issues = vec![];
 
-    println!("processing records");
     let by_users = records.by_users();
+    println!("processing records for {} users", by_users.len());
     let errs = by_users
         .iter()
-        .map(|(e, _)| {
+        .enumerate()
+        .map(|(i, (e, _))| {
+            println!("User Index: {}", i);
             (
                 e,
                 api::get_user_issues(e).map(|x| {
                     x.into_iter()
                         .map(|issue| {
-                            // (
-                            // issue.id,
                             api::get_issue_events(issue.id, e).map(|x| {
                                 x.iter()
                                     .map(|event| (e, ErrorRepr::from_msg(&event.message).unwrap()))
                                     .collect::<Vec<_>>()
                             })
-                            // ,)
                         })
-                        // .filter_map(|(id, x)| {
-                        //     if let Ok(x) = x {
-                        //         Some(x)
-                        //     } else {
-                        //         failed_issues.push((id, e));
-                        //         None
-                        //     }
-                        // })
-                        // .flatten()
                         .collect::<Result<Vec<_>, _>>()
                         .map(|x| x.into_iter().flatten().collect::<Vec<_>>())
                 }),
@@ -65,6 +54,5 @@ fn main() {
 
     println!("Writing res to file");
     std::fs::write("failed_users.txt", format!("{:?}", failed_users)).unwrap();
-    // std::fs::write("failed_issues.txt", format!("{:?}", failed_issues)).unwrap();
     std::fs::write("result.txt", error_tree.to_string()).unwrap();
 }

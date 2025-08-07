@@ -1,5 +1,4 @@
 use const_format::concatc;
-use tap::Tap;
 
 pub mod response;
 
@@ -36,9 +35,6 @@ pub fn get_issue_events(
         .query(&[("statsPeriod", "7d")])
         .query(&[("query", format!("user_email:{}", user_email.as_ref()))])
         .send()?
-        .tap(|r| {
-            dbg!(r.url().to_string());
-        })
         .json()
 }
 
