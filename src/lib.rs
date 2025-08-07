@@ -14,20 +14,15 @@ const ERROR_STACK_PATS: &'static [char] = &['├', '╴', '╰', '▶', '│', '
 #[derive(Debug)]
 pub struct ParseReasonError;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize)]
 pub struct ErrorTree {
-    pub inner: (ErrorNode, UserNode),
-}
-
-struct _ErrorTreeDisp<'a> {
-    inner: (&'a ErrorNode, &'a UserNode),
+    pub users: HashSet<Email>,
+    pub errors: HashMap<ErrorReason, ErrorTree>,
 }
 
 impl ErrorTree {
     pub fn new() -> Self {
-        Self {
-            inner: (ErrorNode::new(), UserNode::new()),
-        }
+        Self::default()
     }
 
     pub fn insert_many(&mut self, email: impl ToString, errors: Vec<Vec<ErrorRepr>>) {
@@ -37,76 +32,45 @@ impl ErrorTree {
     }
 
     pub fn insert(&mut self, email: impl ToString, errors: Vec<ErrorRepr>) {
-        let mut prev = &mut self.inner;
-        prev.1.0.insert(email.to_string());
+        let mut prev = self;
+        prev.users.insert(email.to_string());
 
         for error in errors.iter() {
-            let nodes = prev
-                .0
-                .0
-                .entry(error.reason.clone())
-                .or_insert_with(|| (ErrorNode::new(), UserNode::new()));
+            let nodes = prev.errors.entry(error.reason.clone()).or_default();
 
             prev = nodes;
-            prev.1.0.insert(email.to_string());
+            prev.users.insert(email.to_string());
         }
+    }
+
+    fn _display(
+        &self,
+        indent: usize,
+        f: &mut fmt::Formatter<'_>,
+        parent: &ErrorReason,
+    ) -> std::fmt::Result {
+        const INDENT: &str = "│  ";
+        write!(
+            f,
+            "{}{} ({} Users)\n",
+            INDENT.repeat(indent),
+            parent,
+            self.users.len()
+        )?;
+
+        for (reason, etree) in &self.errors {
+            etree._display(indent + 1, f, reason)?;
+        }
+
+        Ok(())
     }
 }
 
 impl Display for ErrorTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let t = _ErrorTreeDisp {
-            inner: (&self.inner.0, &self.inner.1),
-        };
-
-        t._display(0, f, &ErrorReason::All)?;
+        self._display(0, f, &ErrorReason::All)?;
 
         Ok(())
-    }
-}
-
-impl<'a> _ErrorTreeDisp<'a> {
-    pub fn _display(
-        &self,
-        mut indent: usize,
-        f: &mut fmt::Formatter<'_>,
-        parent: &ErrorReason,
-    ) -> std::fmt::Result {
-        const INDENT: &str = "  ";
-        write!(
-            f,
-            "{}{}({} Users)\n",
-            INDENT.repeat(indent),
-            parent,
-            self.inner.1.0.len()
-        )?;
-        indent += 1;
-        for (reason, (enode, unode)) in &self.inner.0.0 {
-            write!(f, "{}{}\n", INDENT.repeat(indent), reason)?;
-            let t = Self {
-                inner: (enode, unode),
-            };
-            t._display(indent + 1, f, reason)?;
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ErrorNode(HashMap<ErrorReason, (ErrorNode, UserNode)>);
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct UserNode(HashSet<Email>);
-
-impl ErrorNode {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl UserNode {
-    pub fn new() -> Self {
-        Self(HashSet::new())
     }
 }
 
@@ -215,7 +179,8 @@ mod tests {
         let mut tree = ErrorTree::new();
 
         tree.insert_many(email, errors);
+        dbg!(&tree);
 
-        println!("{}", tree);
+        println!("<><><><><>\n\n{}", tree);
     }
 }
