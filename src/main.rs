@@ -1,5 +1,7 @@
 use derr::records::*;
 use derr::*;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::prelude::*;
 use std::io;
 
 fn main() {
@@ -8,15 +10,19 @@ fn main() {
     let records = Records::try_from(&mut rdr).unwrap();
 
     let mut error_tree = ErrorTree::new();
-    let mut failed_users = vec![];
+    let failed_users = std::sync::Mutex::new(vec![]);
 
+    let count = std::sync::atomic::AtomicUsize::new(0);
     let by_users = records.by_users();
     println!("processing records for {} users", by_users.len());
     let errs = by_users
-        .iter()
-        .enumerate()
-        .map(|(i, (e, _))| {
-            println!("User Index: {}", i);
+        .par_iter()
+        .map(|e| {
+            count.fetch_add(1, std::sync::atomic::Ordering::Release);
+            println!(
+                "User Index: {}",
+                count.load(std::sync::atomic::Ordering::Acquire)
+            );
             (
                 e,
                 api::get_user_issues(e).map(|x| {
@@ -37,7 +43,7 @@ fn main() {
             if let Ok(Ok(x)) = x {
                 Some(x)
             } else {
-                failed_users.push(e);
+                failed_users.lock().unwrap().push(e);
                 None
             }
         })
@@ -51,6 +57,8 @@ fn main() {
     for (email, errors) in errs {
         error_tree.insert_many(email, errors);
     }
+
+    error_tree.prune(|e| matches!(e, ErrorReason::OtherError));
 
     println!("Writing res to file");
     std::fs::write("failed_users.txt", format!("{:?}", failed_users)).unwrap();

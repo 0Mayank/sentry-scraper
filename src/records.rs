@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, io, ops::Not};
+use std::{fmt::Display, io, ops::Not};
 
 use serde::{Deserialize, Serialize};
 
@@ -95,7 +95,6 @@ impl ErrorReason {
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash)]
 pub struct UserRecord {
-    error_reason: ErrorReason,
     email: Email,
 }
 
@@ -109,26 +108,8 @@ impl Records {
         Self::default()
     }
 
-    pub fn by_users<'a>(&'a self) -> HashMap<&'a Email, Vec<&'a ErrorReason>> {
-        let mut map: HashMap<&_, Vec<&_>> = HashMap::new();
-        for record in &self.inner {
-            map.entry(&record.email)
-                .or_default()
-                .push(&record.error_reason);
-        }
-
-        map
-    }
-
-    pub fn by_errors<'a>(&'a self) -> HashMap<&'a ErrorReason, Vec<&'a Email>> {
-        let mut map: HashMap<&_, Vec<&_>> = HashMap::new();
-        for record in &self.inner {
-            map.entry(&record.error_reason)
-                .or_default()
-                .push(&record.email);
-        }
-
-        map
+    pub fn by_users(self) -> Vec<Email> {
+        self.inner.into_iter().map(|x| x.email).collect()
     }
 }
 
