@@ -18,6 +18,7 @@ pub enum ErrorReason {
     ErrorSendingRequestForUrl,
     UnexpectedEOFDuringHandshake,
     GenericCancelException,
+    NdCvError,
     DownloadError,
     OSError(i64),
     OtherError,
@@ -75,6 +76,8 @@ impl ErrorReason {
             return Some(Self::UnexpectedEOFDuringHandshake);
         } else if s.contains("Generic(CancelException)") {
             return Some(Self::GenericCancelException);
+        } else if s.contains("NdCvError") {
+            return Some(Self::NdCvError);
         } else if s.contains("span trace") {
             return None;
         } else if s.contains("Error while resolving background task") {
