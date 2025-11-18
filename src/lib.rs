@@ -8,12 +8,17 @@ use tap::TapOptional;
 
 pub mod api;
 pub mod records;
+use clap::Parser;
 
 const ERROR_STACK_PATS: &'static [char] = &['├', '╴', '╰', '▶', '│', '─', '┬', '━'];
 
 #[derive(Debug)]
 pub struct ParseReasonError;
 
+#[derive(Parser, Debug)]
+pub struct Cli {
+    pub csv: Option<String>,
+}
 #[derive(Debug, Default, serde::Serialize)]
 pub struct ErrorTree {
     // TODO: might put location here with either user emails or errors

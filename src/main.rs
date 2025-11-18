@@ -1,13 +1,23 @@
+use clap::Parser;
 use derr::records::*;
 use derr::*;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
+use std::fs::File;
 use std::io;
 
 fn main() {
     println!("fetching records from csv");
-    let mut rdr = csv::Reader::from_reader(io::stdin());
-    let records = Records::try_from(&mut rdr).unwrap();
+
+    let cli = Cli::parse();
+
+    let records = if let Some(path) = cli.csv {
+        let mut rdr = csv::Reader::from_reader(File::open(path).expect("failed to open file"));
+        Records::try_from(&mut rdr).unwrap()
+    } else {
+        let mut rdr = csv::Reader::from_reader(io::stdin());
+        Records::try_from(&mut rdr).unwrap()
+    };
 
     let mut error_tree = ErrorTree::new();
     let failed_users = std::sync::Mutex::new(vec![]);
@@ -49,7 +59,7 @@ fn main() {
         })
         .flatten()
         .collect::<Vec<_>>();
-
+    
     let raw_data = serde_json::to_string_pretty(&errs).unwrap();
     std::fs::write("raw_data.txt", raw_data).unwrap();
 
@@ -58,7 +68,7 @@ fn main() {
         error_tree.insert_many(email, errors);
     }
 
-    error_tree.prune(|e| matches!(e, ErrorReason::OtherError));
+    error_tree.filter(|e| matches!(e, ErrorReason::NdCvError));
 
     println!("Writing res to file");
     std::fs::write("failed_users.txt", format!("{:?}", failed_users)).unwrap();
