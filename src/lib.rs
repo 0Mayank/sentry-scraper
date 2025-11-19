@@ -9,6 +9,8 @@ use tap::TapOptional;
 pub mod api;
 pub mod records;
 
+pub mod error_graph;
+
 const ERROR_STACK_PATS: &'static [char] = &['├', '╴', '╰', '▶', '│', '─', '┬', '━'];
 
 #[derive(Debug)]
@@ -117,7 +119,7 @@ impl Display for ErrorTree {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ErrorRepr {
     pub reason: ErrorReason,
     pub location: Option<String>,
