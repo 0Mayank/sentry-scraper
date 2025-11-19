@@ -34,6 +34,14 @@ struct Cli {
     #[arg(long, value_name = "Raw data output path", default_value_os_t = PathBuf::from(constants::RAW_DATA))]
     raw_data: PathBuf,
 
+    #[arg(
+        long,
+        value_name = "Raw data output path",
+        default_value_os_t = String::from("7d"),
+        help = "Values like 1h, 24h, 7d, 90d, ..."
+    )]
+    period: String,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -62,6 +70,8 @@ fn main() {
     tracing::info!("Starting sentry scraper");
 
     let cli = Cli::parse();
+    let token = &cli.token;
+    let period = &cli.period;
 
     let failed_users = std::sync::Mutex::new(vec![]);
     let count = std::sync::atomic::AtomicUsize::new(0);
@@ -74,12 +84,12 @@ fn main() {
                 SearchCommands::Query { list } => {
                     let issues = list
                         .into_iter()
-                        .filter_map(|q| api::get_issues_with_query(q, &cli.token).ok())
+                        .filter_map(|q| api::get_issues_with_query(q, token, period).ok())
                         .flatten();
 
                     let events = issues
                         .filter_map(|issue| {
-                            api::get_issue_events(issue.id, &cli.token)
+                            api::get_issue_events(issue.id, token, period)
                                 .map(|events| {
                                     events.into_iter().filter_map(|event| {
                                         Some((
@@ -118,11 +128,11 @@ fn main() {
                         );
                         (
                             e,
-                            api::get_user_issues(e, &cli.token).map(|x| {
+                            api::get_user_issues(e, token, period).map(|x| {
                                 x.into_iter()
                                     .map(|issue| {
-                                        api::get_issue_events_for_user(issue.id, e, &cli.token).map(
-                                            |x| {
+                                        api::get_issue_events_for_user(issue.id, e, token, period)
+                                            .map(|x| {
                                                 x.iter()
                                                     .map(|event| {
                                                         (
@@ -132,8 +142,7 @@ fn main() {
                                                         )
                                                     })
                                                     .collect::<Vec<_>>()
-                                            },
-                                        )
+                                            })
                                     })
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|x| x.into_iter().flatten().collect::<Vec<_>>())
