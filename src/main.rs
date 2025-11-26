@@ -19,8 +19,14 @@ struct Cli {
     #[arg(short, long, value_name = "SENTRY API TOKEN", env = TOKEN_ENV_NAME)]
     token: String,
 
+    /// Use the data from raw_data file instead of fetching from sentry
     #[arg(short, long, default_value_t = false)]
-    use_raw: bool,
+    raw: bool,
+
+    // TODO: generalise to all user data
+    /// Use user_id instead of user_email, right now only works in search query command
+    #[arg(short, long, default_value_t = false)]
+    user_id: bool,
 
     #[arg(short, long, default_value_t = false)]
     tree: bool,
@@ -76,12 +82,13 @@ fn main() {
     let failed_users = std::sync::Mutex::new(vec![]);
     let count = std::sync::atomic::AtomicUsize::new(0);
 
-    let errs = if cli.use_raw {
+    let errs = if cli.raw {
         serde_json::from_str(&std::fs::read_to_string(&cli.raw_data).unwrap()).unwrap()
     } else {
         match cli.command {
             Commands::Search { to_search } => match to_search {
                 SearchCommands::Query { list } => {
+                    // TODO: par_iter
                     let issues = list
                         .into_iter()
                         .filter_map(|q| api::get_issues_with_query(q, token, period).ok())
@@ -93,7 +100,11 @@ fn main() {
                                 .map(|events| {
                                     events.into_iter().filter_map(|event| {
                                         Some((
-                                            event.tags.get("user_email").cloned()?,
+                                            if cli.user_id {
+                                                event.tags.get("user_id").cloned()?
+                                            } else {
+                                                event.tags.get("user_email").cloned()?
+                                            },
                                             ErrorRepr::from_msg(&event.message).ok()?,
                                         ))
                                     })
